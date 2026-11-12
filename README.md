@@ -73,3 +73,4 @@ WHERE b.legacy_recorded_expense_usd IS NOT NULL
 * `README.md` — Executive summary, database architecture, and analytical findings.
 * `sql/zindabad_pk_analytics.sql` — Full DDL (`CREATE TABLE`), sample seed data, CTE unit economics, break-even aggregations, and audit variance queries.
 * `Zindabad_PK_Amazon_Unit_Economics_Model_v2.xlsx` — 3-tab dynamic Excel workbook featuring reconciled P&L, SKU comparisons, and a price-vs-volume sensitivity matrix.
+* `python/etl_pipeline.py` — Automated `pandas` & `sqlite3` ETL pipeline for PKR-to-USD conversion and variance reporting.
