@@ -66,7 +66,7 @@ JOIN amazon_fee_schedules f ON p.sku_id = f.sku_id
 JOIN exchange_rates fx ON fx.currency_pair = 'PKR/USD'
 WHERE b.legacy_recorded_expense_usd IS NOT NULL
   AND ABS(reconciled_total_usd - b.legacy_recorded_expense_usd) > 10.00;
-
+```
 ---
 
 ## 6. Repository Structure
