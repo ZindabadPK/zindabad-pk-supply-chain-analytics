@@ -1,85 +1,87 @@
 ![Zindabad PK Brand Header](images/zindabad_pk_banner.jpg)
-# Zindabad PK — Cross-Border Supply Chain & Unit Economics Analytics
+# Zindabad PK: Cross-Border Supply Chain & Unit Economics Analytics
 
-**Tech Stack:** `SQL (PostgreSQL / SQLite)` `Python (pandas / sqlite3)`· `Microsoft Excel (Financial Modeling)` · `Cross-Border Logistics (PKR / USD)`
+**Tech Stack:** `SQL (PostgreSQL / SQLite)` · `Python (pandas / sqlite3)` · `Microsoft Excel (Financial Modeling)` · `Cross-Border Logistics (PKR / USD)`
 
 ## 1. Business Overview
-**Zindabad PK** is a New Jersey-registered e-commerce and cross-border trading operation sourcing regional apparel and home goods from Lahore, Pakistan for distribution via **Amazon FBA** in the United States. 
+**Zindabad PK** is a New Jersey-registered e-commerce and cross-border trading operation sourcing regional apparel and home goods from Lahore, Pakistan for distribution via **Amazon FBA** in the United States.
 
-To eliminate pricing guesswork and protect margins against international air-freight and marketplace fees, I designed a **normalized 4-table relational SQL database** paired with a **dynamic multi-currency Excel unit-economics model**.
+To eliminate pricing guesswork and protect margins against international freight and marketplace fees, I designed a **normalized 4-table relational SQL database**, an **automated Python ETL pipeline**, and a **dynamic multi-currency Excel unit-economics model**.
+
+> **Note:** The SQL file and ETL pipeline ship with sample seed data so every result below can be reproduced by running the code.
 
 ---
 
 ## 2. Database Architecture
-The relational schema separates volatile currency exchange rates and Amazon fee schedules from static supplier costs (`PKR`) to prevent update anomalies:
+The relational schema separates volatile currency exchange rates and Amazon fee schedules from supplier costs (`PKR`) to prevent update anomalies:
 
-* `exchange_rates` — Tracks historical and active `PKR/USD` conversion rates (`276.60 PKR = $1.00 USD`).
-* `products` — Stores SKU metadata, unit weights (`kg`), supplier COGS (`PKR`), international freight (`PKR`), and target retail pricing (`USD`).
-* `amazon_fee_schedules` — Models marketplace referral percentages (`17.0%`), FBA fulfillment fees (`$5.81/unit`), monthly storage (`$0.0864/unit`), and fixed seller subscriptions (`$39.99/mo`).
-* `procurement_batches` — Logs batch quantities and legacy spreadsheet expense totals for automated audit reconciliation.
-
----
-
-## 3. Key Analytical Findings & Financial Impact
-* **Automated Audit Variance Detection:** Built a SQL reconciliation query that uncovered a **$429.25 cost understatement** in legacy budgeting sheets on a 50-unit apparel batch (`$1,144.01` recorded vs. `$1,573.26` actual reconciled cost), caused by a 50% COGS/freight summation omission and an FBA unit-count mismatch (`46.04` vs. `50` units).
-* **Break-Even Floor Protection:** Established an exact **$31.47/unit break-even selling price** (or **31.5 units** at `$50.00/unit`), safeguarding a **37.1% net profit margin** (`$926.74` net profit per 50-unit batch).
-* **SKU Viability Filtering:** Implemented conditional `CASE` and margin-threshold queries (`>= 30%` net margin) that flagged a `$30.00` promotional price tier as high-risk (**6.6% margin** before PPC ad spend), preventing unprofitable inventory allocation.
-* ### Visual Model Breakdown
-
-**50-Unit Batch Cost & Net Margin Breakdown**
-![Zindabad PK 50-Unit Batch Cost and Margin Chart](images/unit_economics_chart.png)
-
-**Price vs. Batch Volume Sensitivity Matrix ($30–$70 Retail Tiers)**
-![Zindabad PK Pricing Sensitivity Matrix](images/pricing_sensitivity_matrix.png)
+* `exchange_rates` : Tracks dated `USD/PKR` conversion rates (`rate_date`, `usd_to_pkr`).
+* `products` : Stores the SKU catalog (`sku`, `product_name`, `category`) and target retail price (`USD`).
+* `amazon_fee_schedules` : Models per-SKU referral fee percentage, FBA fulfillment fee, and monthly storage cost per unit.
+* `procurement_batches` : Logs batch quantities, supplier COGS (`PKR`), freight (`PKR`), customs duty (`USD`), and the landed cost reported in the legacy spreadsheet, for automated audit reconciliation.
 
 ---
 
-## 4. Reconciled SKU Performance Summary
+## 3. Key Analytical Findings (Sample Seed Data)
+* **Automated Audit Variance Detection:** A SQL reconciliation query flagged `BATCH-2026-01` (100 leather satchels): the legacy sheet reported **$1,565.00** landed cost against a recalculated **$1,994.19**, a **$429.19 understatement**. `BATCH-2026-02` reconciled within tolerance (a $0.19 difference against the $10 threshold).
+* **Break-Even Pricing:** The unit-economics query solves for the break-even retail price after marketplace referral fees: **$30.69** for the leather satchel and **$32.89** for the pashmina shawl.
+* **SKU Viability Filtering:** A margin-threshold `CASE` rule (30% net margin or more is Approved) classified the pashmina shawl at **42.0%** net margin and the leather satchel at **32.8%**.
 
-| SKU ID | Product Line | Batch Qty | Target Price (USD) | Landed Unit Cost (USD) | Net Profit / Unit | Net Margin | Status |
+---
+
+## 4. Reconciled SKU Performance Summary (Query 2 Output)
+
+| SKU ID | Product | Target Price (USD) | Total Unit Cost (USD) | Break-Even (USD) | Net Profit / Unit | Net Margin | Status |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| `ZPK-MAT-03` | Artisan Woven Mats | 23.6 | $668.00 | $306.95 | $361.05 | **54.0%** | Approved |
-| `ZPK-APP-01` | Base Apparel (50-Unit Batch) | 50.0 | $50.00 | $31.47 | $18.53 | **37.1%** | Approved |
-| `ZPK-DRS-02` | Embroidered Dresses (35kg) | 50.0 | $65.00 | $48.48 | $16.52 | **25.4%** | Watchlist |
-| `ZPK-VAL-04` | Value Tier Apparel ($30 Promo) | 53.0 | $30.00 | $28.02 | $1.98 | **6.6%** | Rejected |
+| `ZPK-LHR-002` | Embroidered Pashmina Shawl | $65.00 | $37.71 | $32.89 | $27.29 | **42.0%** | Approved |
+| `ZPK-LHR-001` | Handcrafted Artisanal Leather Satchel | $50.00 | $33.59 | $30.69 | $16.41 | **32.8%** | Approved |
 
 ---
 
 ## 5. Featured SQL Audit Query (Variance Detection)
 ```sql
-SELECT
-    b.batch_id,
-    p.sku_id,
-    b.order_qty,
-    b.legacy_recorded_expense_usd,
-    ROUND(
-        b.order_qty * (
-            (p.unit_cogs_pkr + p.intl_shipping_pkr) / fx.rate_to_usd
-            + f.fba_fulfillment_usd
-            + (p.target_price_usd * f.referral_fee_pct)
-            + f.monthly_storage_per_unit_usd
-        ) + f.monthly_pro_sub_usd, 2
-    ) AS reconciled_total_usd,
-    ROUND(
-        (b.order_qty * (
-            (p.unit_cogs_pkr + p.intl_shipping_pkr) / fx.rate_to_usd
-            + f.fba_fulfillment_usd
-            + (p.target_price_usd * f.referral_fee_pct)
-            + f.monthly_storage_per_unit_usd
-        ) + f.monthly_pro_sub_usd) - b.legacy_recorded_expense_usd, 2
-    ) AS variance_gap_usd
-FROM procurement_batches b
-JOIN products p ON b.sku_id = p.sku_id
-JOIN amazon_fee_schedules f ON p.sku_id = f.sku_id
-JOIN exchange_rates fx ON fx.currency_pair = 'PKR/USD'
-WHERE b.legacy_recorded_expense_usd IS NOT NULL
-  AND ABS(reconciled_total_usd - b.legacy_recorded_expense_usd) > 10.00;
+WITH batch_calculations AS (
+    SELECT
+        pb.batch_id,
+        p.sku,
+        p.product_name,
+        pb.units_ordered,
+        pb.reported_landed_cost_usd,
+        ROUND(
+            ((pb.unit_cogs_pkr + pb.freight_per_unit_pkr) / er.usd_to_pkr) * pb.units_ordered
+            + pb.customs_duty_usd,
+            2
+        ) AS calculated_landed_cost_usd
+    FROM procurement_batches pb
+    JOIN products p ON pb.sku = p.sku
+    JOIN exchange_rates er ON pb.rate_date = er.rate_date
+),
+variance_audit AS (
+    SELECT
+        batch_id, sku, product_name, units_ordered,
+        reported_landed_cost_usd, calculated_landed_cost_usd,
+        ROUND(calculated_landed_cost_usd - reported_landed_cost_usd, 2) AS cost_variance_usd
+    FROM batch_calculations
+)
+SELECT *
+FROM variance_audit
+WHERE ABS(cost_variance_usd) > 10.00
+ORDER BY ABS(cost_variance_usd) DESC;
 ```
+
 ---
 
-## 6. Repository Structure
-* `README.md` — Executive summary, database architecture, and analytical findings.
-* `Zindabad_PK_Live_FX_Google_Sheets_Model.xlsx` — Google Sheets-compatible workbook integrated with `GOOGLEFINANCE("CURRENCY:USDPKR")` for real-time exchange rate tracking and live margin recalculation.
-* `sql/zindabad_pk_analytics.sql` — Full DDL (`CREATE TABLE`), sample seed data, CTE unit economics, break-even aggregations, and audit variance queries.
-* `Zindabad_PK_Amazon_Unit_Economics_Model_v2.xlsx` — 3-tab dynamic Excel workbook featuring reconciled P&L, SKU comparisons, and a price-vs-volume sensitivity matrix.
-* `python/etl_pipeline.py` — Automated `pandas` & `sqlite3` ETL pipeline for PKR-to-USD conversion and variance reporting.
+## 6. Excel Unit-Economics Model
+The Excel workbooks extend the SQL analysis with a reconciled P&L, SKU comparisons, and a price-versus-volume sensitivity matrix.
+
+![Batch Cost and Margin Chart](images/unit_economics_chart.png)
+![Pricing Sensitivity Matrix](images/pricing_sensitivity_matrix.png)
+
+---
+
+## 7. Repository Structure
+* `README.md` : Executive summary, database architecture, and analytical findings.
+* `sql/zindabad_pk_analytics.sql` : Full DDL (`CREATE TABLE`), sample seed data, the variance audit query, and the unit economics, break-even, and margin query.
+* `python/etl_pipeline.py` : Automated `pandas` and `sqlite3` ETL pipeline for PKR-to-USD conversion and variance reporting.
+* `Zindabad_PK_Amazon_Unit_Economics_Model_v2.xlsx` : 3-tab dynamic Excel workbook with reconciled P&L, SKU comparisons, and a price-versus-volume sensitivity matrix.
+* `Zindabad_PK_Live_FX_Google_Sheets_Model.xlsx` : Google Sheets-compatible workbook using `GOOGLEFINANCE("CURRENCY:USDPKR")` for live exchange rates and margin recalculation.
