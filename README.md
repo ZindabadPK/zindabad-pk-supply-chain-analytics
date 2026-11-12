@@ -1,3 +1,4 @@
+![Zindabad PK Brand Header](images/zindabad_pk_banner.png)
 # Zindabad PK — Cross-Border Supply Chain & Unit Economics Analytics
 
 **Tech Stack:** `SQL (PostgreSQL / SQLite)` `Python (pandas / sqlite3)`· `Microsoft Excel (Financial Modeling)` · `Cross-Border Logistics (PKR / USD)`
