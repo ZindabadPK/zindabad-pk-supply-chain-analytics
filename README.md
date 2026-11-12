@@ -23,6 +23,13 @@ The relational schema separates volatile currency exchange rates and Amazon fee 
 * **Automated Audit Variance Detection:** Built a SQL reconciliation query that uncovered a **$429.25 cost understatement** in legacy budgeting sheets on a 50-unit apparel batch (`$1,144.01` recorded vs. `$1,573.26` actual reconciled cost), caused by a 50% COGS/freight summation omission and an FBA unit-count mismatch (`46.04` vs. `50` units).
 * **Break-Even Floor Protection:** Established an exact **$31.47/unit break-even selling price** (or **31.5 units** at `$50.00/unit`), safeguarding a **37.1% net profit margin** (`$926.74` net profit per 50-unit batch).
 * **SKU Viability Filtering:** Implemented conditional `CASE` and margin-threshold queries (`>= 30%` net margin) that flagged a `$30.00` promotional price tier as high-risk (**6.6% margin** before PPC ad spend), preventing unprofitable inventory allocation.
+* ### Visual Model Breakdown
+
+**50-Unit Batch Cost & Net Margin Breakdown**
+![Zindabad PK 50-Unit Batch Cost and Margin Chart](images/unit_economics_chart.png)
+
+**Price vs. Batch Volume Sensitivity Matrix ($30–$70 Retail Tiers)**
+![Zindabad PK Pricing Sensitivity Matrix](images/pricing_sensitivity_matrix.png)
 
 ---
 
