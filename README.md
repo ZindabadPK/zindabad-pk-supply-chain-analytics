@@ -1,6 +1,6 @@
 # Zindabad PK — Cross-Border Supply Chain & Unit Economics Analytics
 
-**Tech Stack:** `SQL (PostgreSQL / SQLite)` · `Microsoft Excel (Financial Modeling)` · `Cross-Border Logistics (PKR / USD)`
+**Tech Stack:** `SQL (PostgreSQL / SQLite)` `Python (pandas / sqlite3)`· `Microsoft Excel (Financial Modeling)` · `Cross-Border Logistics (PKR / USD)`
 
 ## 1. Business Overview
 **Zindabad PK** is a New Jersey-registered e-commerce and cross-border trading operation sourcing regional apparel and home goods from Lahore, Pakistan for distribution via **Amazon FBA** in the United States. 
