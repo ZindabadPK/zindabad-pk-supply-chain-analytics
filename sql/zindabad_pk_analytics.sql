@@ -70,4 +70,97 @@ INSERT INTO procurement_batches (
 
 -- ============================================================================
 -- Query 1: Landed Batch Cost Variance Audit (ANSI-SQL / PostgreSQL Safe)
--- Flags
+-- Flags any batch where reported landed cost differs from calculated cost > $10
+-- ============================================================================
+
+WITH batch_calculations AS (
+    SELECT
+        pb.batch_id,
+        p.sku,
+        p.product_name,
+        pb.units_ordered,
+        pb.reported_landed_cost_usd,
+        ROUND(
+            ((pb.unit_cogs_pkr + pb.freight_per_unit_pkr) / er.usd_to_pkr) * pb.units_ordered
+            + pb.customs_duty_usd,
+            2
+        ) AS calculated_landed_cost_usd
+    FROM procurement_batches pb
+    JOIN products p ON pb.sku = p.sku
+    JOIN exchange_rates er ON pb.rate_date = er.rate_date
+),
+variance_audit AS (
+    SELECT
+        batch_id,
+        sku,
+        product_name,
+        units_ordered,
+        reported_landed_cost_usd,
+        calculated_landed_cost_usd,
+        ROUND(calculated_landed_cost_usd - reported_landed_cost_usd, 2) AS cost_variance_usd
+    FROM batch_calculations
+)
+SELECT
+    batch_id,
+    sku,
+    product_name,
+    units_ordered,
+    reported_landed_cost_usd,
+    calculated_landed_cost_usd,
+    cost_variance_usd
+FROM variance_audit
+WHERE ABS(cost_variance_usd) > 10.00
+ORDER BY ABS(cost_variance_usd) DESC;
+
+-- ============================================================================
+-- Query 2: SKU Unit Economics, Break-Even Floor & Net Margin Summary
+-- ============================================================================
+
+WITH unit_costs AS (
+    SELECT
+        p.sku,
+        p.product_name,
+        p.target_retail_price_usd,
+        ROUND(
+            ((pb.unit_cogs_pkr + pb.freight_per_unit_pkr) / er.usd_to_pkr)
+            + (pb.customs_duty_usd / pb.units_ordered),
+            2
+        ) AS landed_unit_cost_usd,
+        af.referral_fee_pct,
+        af.fba_fulfillment_fee_usd,
+        af.monthly_storage_per_unit_usd
+    FROM procurement_batches pb
+    JOIN products p ON pb.sku = p.sku
+    JOIN exchange_rates er ON pb.rate_date = er.rate_date
+    JOIN amazon_fee_schedules af ON p.sku = af.sku
+),
+unit_margins AS (
+    SELECT
+        sku,
+        product_name,
+        target_retail_price_usd,
+        landed_unit_cost_usd,
+        ROUND(
+            landed_unit_cost_usd
+            + (target_retail_price_usd * referral_fee_pct)
+            + fba_fulfillment_fee_usd
+            + monthly_storage_per_unit_usd,
+            2
+        ) AS total_unit_cost_usd,
+        ROUND(
+            (landed_unit_cost_usd + fba_fulfillment_fee_usd + monthly_storage_per_unit_usd)
+            / (1.0 - referral_fee_pct),
+            2
+        ) AS break_even_price_usd
+    FROM unit_costs
+)
+SELECT
+    sku,
+    product_name,
+    target_retail_price_usd,
+    total_unit_cost_usd,
+    break_even_price_usd,
+    ROUND(target_retail_price_usd - total_unit_cost_usd, 2) AS net_profit_per_unit_usd,
+    ROUND(((target_retail_price_usd - total_unit_cost_usd) / target_retail_price_usd) * 100, 1) AS net_margin_pct
+FROM unit_margins
+ORDER BY net_margin_pct DESC;
