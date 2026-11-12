@@ -1,6 +1,6 @@
 -- ============================================================================
--- Zindabad PK — Cross-Border Supply Chain & Unit Economics Schema & Audit
--- Compatible with: PostgreSQL 14+ & SQLite 3.35+ (Strict ANSI-SQL)
+-- Zindabad PK - Cross-Border Supply Chain & Unit Economics Schema & Audit
+-- Compatible with: PostgreSQL 14+ & SQLite 3.35+
 -- ============================================================================
 
 DROP TABLE IF EXISTS procurement_batches;
@@ -31,7 +31,7 @@ CREATE TABLE amazon_fee_schedules (
     FOREIGN KEY (sku) REFERENCES products(sku)
 );
 
--- 4. Procurement Batches (Lahore Sourcing -> US FBA)
+-- 4. Procurement Batches (Lahore Sourcing to US FBA)
 CREATE TABLE procurement_batches (
     batch_id VARCHAR(50) PRIMARY KEY,
     sku VARCHAR(50) NOT NULL,
@@ -69,8 +69,8 @@ INSERT INTO procurement_batches (
 ('BATCH-2026-02', 'ZPK-LHR-002', '2026-10-01', 150, 5100.00, 820.00, 210.00, 3391.85);
 
 -- ============================================================================
--- Query 1: Landed Batch Cost Variance Audit (ANSI-SQL / PostgreSQL Safe)
--- Flags any batch where reported landed cost differs from calculated cost > $10
+-- Query 1: Landed Batch Cost Variance Audit
+-- Flags any batch where reported landed cost differs from calculated cost by more than $10
 -- ============================================================================
 
 WITH batch_calculations AS (
@@ -113,7 +113,8 @@ WHERE ABS(cost_variance_usd) > 10.00
 ORDER BY ABS(cost_variance_usd) DESC;
 
 -- ============================================================================
--- Query 2: SKU Unit Economics, Break-Even Floor & Net Margin Summary
+-- Query 2: SKU Unit Economics, Break-Even Price, Net Margin and Viability Status
+-- Status rule: net margin of 30% or more is Approved, otherwise Below Threshold
 -- ============================================================================
 
 WITH unit_costs AS (
@@ -161,6 +162,11 @@ SELECT
     total_unit_cost_usd,
     break_even_price_usd,
     ROUND(target_retail_price_usd - total_unit_cost_usd, 2) AS net_profit_per_unit_usd,
-    ROUND(((target_retail_price_usd - total_unit_cost_usd) / target_retail_price_usd) * 100, 1) AS net_margin_pct
+    ROUND(((target_retail_price_usd - total_unit_cost_usd) / target_retail_price_usd) * 100, 1) AS net_margin_pct,
+    CASE
+        WHEN ((target_retail_price_usd - total_unit_cost_usd) / target_retail_price_usd) * 100 >= 30
+            THEN 'Approved'
+        ELSE 'Below Threshold'
+    END AS viability_status
 FROM unit_margins
 ORDER BY net_margin_pct DESC;
