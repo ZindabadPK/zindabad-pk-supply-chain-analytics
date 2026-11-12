@@ -4,20 +4,36 @@ Author: Muhammad Adil
 Repository: github.com/ZindabadPK/zindabad-pk-supply-chain-analytics
 
 Description:
-    Ingests raw supplier and Amazon FBA cost data (CSV or fallback records),
-    normalizes multi-currency (PKR/USD) unit economics into a 4-table SQLite
-    relational schema, and executes an automated audit variance query to flag
-    cost understatements and margin risks prior to batch procurement.
+    Fetches the live USD/PKR exchange rate (with an offline fallback), ingests
+    raw supplier and Amazon FBA cost data, normalizes multi-currency unit
+    economics into a 4-table SQLite relational schema, and executes an
+    automated audit variance query to flag cost understatements.
 """
 
+from datetime import date
+import json
 import os
 import sqlite3
+import urllib.request
 import pandas as pd
 
 
 DB_PATH = "zindabad_pk_analytics.db"
 CSV_PATH = "Amazon_Budget.csv"
-DEFAULT_FX_RATE = 276.60  # PKR per $1.00 USD
+DEFAULT_FX_RATE = 276.60  # Fallback PKR per $1.00 USD
+
+
+def fetch_live_pkr_rate(fallback_rate: float = DEFAULT_FX_RATE) -> tuple[float, str]:
+    """Fetch the live USD-to-PKR exchange rate with an automatic offline fallback."""
+    url = "https://open.er-api.com/v6/latest/USD"
+    today_str = date.today().isoformat()
+    try:
+        with urllib.request.urlopen(url, timeout=5) as response:
+            data = json.loads(response.read().decode("utf-8"))
+            live_rate = float(data["rates"]["PKR"])
+            return round(live_rate, 2), today_str
+    except Exception:
+        return fallback_rate, today_str
 
 
 def create_schema(conn: sqlite3.Connection) -> None:
@@ -67,10 +83,10 @@ def create_schema(conn: sqlite3.Connection) -> None:
 
 def extract_and_transform(csv_path: str) -> dict[str, pd.DataFrame]:
     """
-    Extract raw supplier figures from Amazon_Budget.csv (if present) and
-    structure them into clean, normalized DataFrames for database loading.
+    Fetch live FX rate, parse raw supplier figures from Amazon_Budget.csv
+    (if present), and structure clean DataFrames for database loading.
     """
-    fx_rate = DEFAULT_FX_RATE
+    fx_rate, effective_date = fetch_live_pkr_rate()
     base_cogs_pkr = 3000.00
     base_ship_pkr = 1500.00
     base_qty = 50.0
@@ -80,28 +96,23 @@ def extract_and_transform(csv_path: str) -> dict[str, pd.DataFrame]:
     storage_fee_usd = 0.0864
     pro_sub_usd = 39.99
 
-    # Parse legacy CSV if available in working directory to verify raw inputs
     if os.path.exists(csv_path):
         raw_df = pd.read_csv(csv_path, header=None, names=["item", "pkr", "usd", "extra"])
         raw_df["item"] = raw_df["item"].astype(str).str.strip()
         raw_df["pkr_num"] = pd.to_numeric(raw_df["pkr"], errors="coerce")
         raw_df["usd_num"] = pd.to_numeric(raw_df["usd"], errors="coerce")
 
-        # Keep only rows with valid numeric currency figures
         numeric_rows = raw_df.dropna(subset=["pkr_num", "usd_num"]).set_index("item")
 
         if "Cost of Good" in numeric_rows.index:
             base_cogs_pkr = float(numeric_rows.loc["Cost of Good", "pkr_num"])
-            implied_usd = float(numeric_rows.loc["Cost of Good", "usd_num"])
-            if implied_usd > 0:
-                fx_rate = round(base_cogs_pkr / implied_usd, 2)
         if "Cost of Shipping per Unit" in numeric_rows.index:
             base_ship_pkr = float(numeric_rows.loc["Cost of Shipping per Unit", "pkr_num"])
         if "Total Expenses" in numeric_rows.index:
             legacy_expense_usd = float(numeric_rows.loc["Total Expenses", "usd_num"])
 
     df_fx = pd.DataFrame([
-        {"currency_pair": "PKR/USD", "rate_to_usd": fx_rate, "effective_date": "2026-11-01"}
+        {"currency_pair": "PKR/USD", "rate_to_usd": fx_rate, "effective_date": effective_date}
     ])
 
     df_products = pd.DataFrame([
@@ -143,10 +154,6 @@ def extract_and_transform(csv_path: str) -> dict[str, pd.DataFrame]:
         },
     ])
 
-    # Pre-compute USD landed equivalents in pandas for verification
-    df_products["unit_cogs_usd"] = (df_products["unit_cogs_pkr"] / fx_rate).round(2)
-    df_products["intl_shipping_usd"] = (df_products["intl_shipping_pkr"] / fx_rate).round(2)
-
     df_fees = pd.DataFrame([
         {"fee_id": 1, "sku_id": "ZPK-APP-01", "referral_fee_pct": 0.1700, "fba_fulfillment_usd": fba_fee_usd, "monthly_storage_per_unit_usd": storage_fee_usd, "monthly_pro_sub_usd": pro_sub_usd},
         {"fee_id": 2, "sku_id": "ZPK-DRS-02", "referral_fee_pct": 0.1700, "fba_fulfillment_usd": fba_fee_usd, "monthly_storage_per_unit_usd": storage_fee_usd, "monthly_pro_sub_usd": pro_sub_usd},
@@ -161,12 +168,11 @@ def extract_and_transform(csv_path: str) -> dict[str, pd.DataFrame]:
         {"batch_id": "BATCH-004", "sku_id": "ZPK-VAL-04", "batch_date": "2026-11-02", "order_qty": 53.0,     "legacy_recorded_expense_usd": 1590.00},
     ])
 
-    # Drop helper columns before loading into normalized SQL schema
-    db_products = df_products.drop(columns=["unit_cogs_usd", "intl_shipping_usd"])
+    print(f"Active FX Rate Loaded: 1 USD = {fx_rate} PKR (Effective: {effective_date})\n")
 
     return {
         "exchange_rates": df_fx,
-        "products": db_products,
+        "products": df_products,
         "amazon_fee_schedules": df_fees,
         "procurement_batches": df_batches,
     }
